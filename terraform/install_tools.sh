@@ -1,44 +1,81 @@
 #!/bin/bash
 
-# Update system and install core packages
-sudo apt update
-sudo apt install -y fontconfig openjdk-17-jre 
+set -e
 
-# Jenkins installation
-sudo wget -O /usr/share/keyrings/jenkins-keyring.asc \
-  https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
-echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc]" \
-  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
-  /etc/apt/sources.list.d/jenkins.list > /dev/null
-sudo apt-get update
-sudo apt-get -y install jenkins
+echo "🔄 Updating system..."
+sudo apt update -y
 
-sudo systemctl start jenkins
+echo "☕ Installing Java 21 (Required for Jenkins)..."
+sudo apt install -y fontconfig openjdk-21-jre
+
+java -version
+
+# ---------------- JENKINS INSTALL ----------------
+echo "🔑 Adding Jenkins key..."
+sudo mkdir -p /etc/apt/keyrings
+
+wget -O /tmp/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+sudo mv /tmp/jenkins-keyring.asc /etc/apt/keyrings/jenkins-keyring.asc
+
+echo "📦 Adding Jenkins repo..."
+echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" | \
+sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
+
+sudo apt update -y
+
+echo "🚀 Installing Jenkins..."
+sudo apt install -y jenkins
+
 sudo systemctl enable jenkins
+sudo systemctl start jenkins
 
-# Docker installation
-sudo apt-get update
-sudo apt-get install docker.io -y
+# ---------------- DOCKER INSTALL ----------------
+echo "🐳 Installing Docker..."
+sudo apt install -y docker.io
 
-# User group permission
+sudo systemctl enable docker
+sudo systemctl start docker
+
+echo "👤 Adding users to Docker group..."
 sudo usermod -aG docker $USER
 sudo usermod -aG docker jenkins
 
+sudo newgrp docker
+
+# ---------------- TRIVY INSTALL (UPDATED METHOD) ----------------
+echo "🔐 Installing Trivy..."
+
+sudo mkdir -p /etc/apt/keyrings
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+  sudo tee /etc/apt/keyrings/trivy.gpg > /dev/null
+
+echo "deb [signed-by=/etc/apt/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | \
+  sudo tee /etc/apt/sources.list.d/trivy.list
+
+sudo apt update -y
+sudo apt install -y trivy
+
+# ---------------- AWS CLI ----------------
+echo "☁️ Installing AWS CLI..."
+sudo snap install aws-cli --classic
+
+# ---------------- HELM ----------------
+echo "⛵ Installing Helm..."
+sudo snap install helm --classic
+
+# ---------------- KUBECTL ----------------
+echo "☸️ Installing Kubectl..."
+sudo snap install kubectl --classic
+
+# ---------------- FINAL ----------------
+echo "🔄 Restarting services..."
 sudo systemctl restart docker
 sudo systemctl restart jenkins
 
-# Install dependencies and Trivy
-sudo apt-get install wget apt-transport-https gnupg lsb-release snapd -y
-wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
-sudo apt-get update -y
-sudo apt-get install trivy -y
+echo "🎉 Setup Completed!"
 
-# AWS CLI installation
-sudo snap install aws-cli --classic
+echo "🌐 Access Jenkins: http://<your-server-ip>:8080"
+echo "🔐 Initial Admin Password:"
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
-# Helm installation
-sudo snap install helm --classic
-
-# Kubectl installation
-sudo snap install kubectl --classic
+echo "⚠️ IMPORTANT: Logout & login again for Docker group to apply"
